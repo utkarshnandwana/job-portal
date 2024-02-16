@@ -1,21 +1,13 @@
 import Users from "../models/userModel.js";
+import bcrypt from "bcryptjs";
 
 export const register = async (req, res, next) => {
   const { firstName, lastName, email, password } = req.body;
 
-  //validate fileds
-
-  if (!firstName) {
-    next("First Name is required");
-  }
-  if (!email) {
-    next("Email is required");
-  }
-  if (!lastName) {
-    next("Last Name is required");
-  }
-  if (!password) {
-    next("Password is required");
+  // Validate fields
+  if (!firstName || !lastName || !email || !password) {
+    next("All fields are required");
+    return;
   }
 
   try {
@@ -26,15 +18,18 @@ export const register = async (req, res, next) => {
       return;
     }
 
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const user = await Users.create({
       firstName,
       lastName,
       email,
-      password,
+      password: hashedPassword, // Save hashed password to the database
     });
 
-    // user token
-    const token = await user.createJWT();
+    // Generate user token
+    const token = user.createJWT();
 
     res.status(201).send({
       success: true,
@@ -58,35 +53,37 @@ export const signIn = async (req, res, next) => {
   const { email, password } = req.body;
 
   try {
-    //validation
+    // Validation
     if (!email || !password) {
-      next("Please Provide AUser Credentials");
+      next("Please provide user credentials");
       return;
     }
 
-    // find user by email
-    const user = await Users.findOne({ email }).select("+password");
+    // Find user by email
+    const user = await Users.findOne({ email });
 
     if (!user) {
-      next("Invalid -email or password");
+      next("Invalid email");
       return;
     }
 
-    // compare password
-    const isMatch = await user.comparePassword(password);
+    // Compare hashed password
+    const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      next("Invalid email or password");
+      next("Invalid password");
       return;
     }
 
+    // Remove password field from user object
     user.password = undefined;
 
+    // Generate user token
     const token = user.createJWT();
 
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      message: "Login successfully",
+      message: "Login successful",
       user,
       token,
     });
